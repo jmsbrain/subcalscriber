@@ -60,7 +60,7 @@ class FeedEditViewModel(id: String?) : LightViewModel<Unit>() {
             busy.value = false
             draft.value = Calendar.feed(saved.id) ?: saved
             val error = draft.value.error
-            if (error == null) done() else message.value = "Saved, but couldn't download it: $error\n\nCheck the address."
+            if (error == null) done() else message.value = "Saved, but couldn't download it.\n\n$error"
         }
     }
 

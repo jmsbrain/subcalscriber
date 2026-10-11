@@ -65,7 +65,7 @@ class FeedsScreen(sealedActivity: SealedLightActivity) : SimpleLightScreen<Unit>
 private val updatedFmt = DateTimeFormatter.ofPattern("MMM d, h:mm a", Locale.US)
 
 fun status(feed: Feed): String = when {
-    feed.error != null -> "Couldn't update: ${feed.error}"
+    feed.error != null -> "Couldn't update. ${feed.error}"
     feed.updatedAt == null -> "Not downloaded yet"
     else -> "Updated " + Instant.ofEpochMilli(feed.updatedAt).atZone(ZoneId.systemDefault()).format(updatedFmt)
 }

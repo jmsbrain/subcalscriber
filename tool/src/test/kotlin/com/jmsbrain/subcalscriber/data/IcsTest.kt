@@ -90,6 +90,15 @@ class IcsTest {
         assertEquals(null, Ics.calendarName(cal("UID:1\r\nDTSTART:20261014T120000Z")))
     }
 
+    @Test fun googleShareLinksBecomeIcsAddresses() {
+        val ics = "https://calendar.google.com/calendar/ical/en.usa%23holiday%40group.v.calendar.google.com/public/basic.ics"
+        assertEquals(ics, Calendar.googleIcsUrl("https://calendar.google.com/calendar/u/0?cid=ZW4udXNhI2hvbGlkYXlAZ3JvdXAudi5jYWxlbmRhci5nb29nbGUuY29t"))
+        assertEquals(ics, Calendar.googleIcsUrl("https://calendar.google.com/calendar/embed?src=en.usa%23holiday%40group.v.calendar.google.com&ctz=America%2FNew_York"))
+        assertEquals(ics, Calendar.googleIcsUrl("https://accounts.google.com/ServiceLogin?continue=https%3A%2F%2Fcalendar.google.com%2Fcalendar%2Fu%2F0%3Fcid%3DZW4udXNhI2hvbGlkYXlAZ3JvdXAudi5jYWxlbmRhci5nb29nbGUuY29t"))
+        assertEquals(null, Calendar.googleIcsUrl("https://example.com/?cid=ZW4udXNh"))
+        assertEquals("https://bit.ly/abc", Calendar.httpUrl("http://bit.ly/abc"))
+    }
+
     @Test fun webcalBecomesHttps() {
         assertEquals("https://example.com/a.ics", Calendar.httpUrl("webcal://example.com/a.ics"))
         assertEquals("W", tagFrom(" work"))

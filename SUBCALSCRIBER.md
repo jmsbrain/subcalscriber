@@ -19,6 +19,7 @@ The APK ends up in `tool/build/outputs/apk/debug/tool-debug.apk`.
 ## Using it
 
 - **Easiest:** open Tool Manager on your computer, go to SubcalScriber → **Add feeds**, and upload a plain text file with your calendar links, one per line (`https://…` or `webcal://…`). Put a name first to choose it (`Work: https://…`); otherwise it uses the calendar's own name. Open SubcalScriber and they're added; the file is deleted once read.
+- **Google Calendar:** share links (`calendar.google.com/…?cid=…`, including shortened ones) work for public calendars; SubcalScriber swaps them for the calendar's .ics address. Private calendars need the "Secret address in iCal format" from Google Calendar → Settings → the calendar → Integrate calendar.
 - **On the phone:** tap the gear, then **ADD FEED**, and type the name and address. (Light's keyboard can't paste.) It downloads right away so a bad address shows up immediately.
 - Each feed gets a one-letter tag, shown next to its events. It defaults to a letter of the name that no other feed uses; tap **LETTER** to change it.
 - The agenda shows the next 60 days. **SHOW** cycles through all feeds, then one feed at a time.

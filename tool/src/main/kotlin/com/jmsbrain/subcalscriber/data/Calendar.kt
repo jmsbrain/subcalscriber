@@ -82,28 +82,84 @@ object Calendar {
         write(_feeds.value.filterNot { it.id == id })
     }
 
+    private class FeedError(message: String) : Exception(message)
+
+    private class Download(val url: String, val status: Int, val body: String)
+
+    private suspend fun get(url: String): Download {
+        val host = hostOf(url)
+        try {
+            val response = client.get(url) { header("Accept", "text/calendar, */*") }
+            return Download(response.call.request.url.toString(), response.status.value, response.bodyAsText())
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            throw FeedError(
+                when (e) {
+                    is javax.net.ssl.SSLException, is java.security.cert.CertificateException ->
+                        "The phone doesn't trust the security certificate of $host."
+                    is java.net.UnknownHostException -> "Couldn't reach $host. Check the address and that the phone is online."
+                    is java.net.SocketTimeoutException -> "$host took too long to answer."
+                    else -> "Couldn't connect to $host."
+                },
+            )
+        }
+    }
+
+    /**
+     * Fetches the calendar behind [link]: follows short links and turns Google
+     * share links into the calendar's .ics address. Returns the final address and the file.
+     */
+    private suspend fun fetchCalendar(link: String): Pair<String, String> {
+        var d = get(googleIcsUrl(httpUrl(link)) ?: httpUrl(link))
+        if (!d.body.contains("BEGIN:VCALENDAR")) {
+            googleIcsUrl(d.url)?.let { ics ->
+                d = get(ics)
+                if (d.status == 404 || d.status == 403) throw FeedError(GOOGLE_PRIVATE)
+            }
+        }
+        if (d.status !in 200..299) {
+            throw FeedError(
+                if (hostOf(d.url).endsWith("google.com") && (d.status == 404 || d.status == 403)) GOOGLE_PRIVATE
+                else "${hostOf(d.url)} said ${d.status}. Check the address."
+            )
+        }
+        if (!d.body.contains("BEGIN:VCALENDAR")) {
+            throw FeedError("That link opens a web page, not a calendar feed. Look for an address ending in .ics or starting with webcal://.")
+        }
+        return d.url to d.body
+    }
+
     /** Downloads one feed. Keeps the old copy if anything goes wrong. */
     suspend fun refresh(id: String) {
         val feed = feed(id) ?: return
         val result = runCatching {
-            val response = client.get(httpUrl(feed.url)) { header("Accept", "text/calendar, */*") }
-            if (!response.status.isSuccess()) error("Server said ${response.status.value}")
-            val body = response.bodyAsText()
-            if (!body.contains("BEGIN:VCALENDAR")) error("Not a calendar feed")
+            val (finalUrl, body) = fetchCalendar(feed.url)
             withContext(Dispatchers.IO) {
                 icsFile(id).parentFile?.mkdirs()
                 icsFile(id).writeText(body)
             }
             lock.withLock { parsed[id] = withContext(Dispatchers.Default) { Ics.parse(body) } }
+            finalUrl
         }
         lock.withLock {
             val current = feed(id) ?: return@withLock
             val updated = result.fold(
-                onSuccess = { current.copy(updatedAt = System.currentTimeMillis(), error = null) },
-                onFailure = { current.copy(error = it.message ?: "Couldn't download") },
+                // Keep the real address so short links aren't needed again.
+                onSuccess = { current.copy(url = if (resolvedIsBetter(current.url, it)) it else current.url, updatedAt = System.currentTimeMillis(), error = null) },
+                onFailure = { current.copy(error = if (it is FeedError) it.message else "Couldn't download this feed.") },
             )
             write(_feeds.value.map { if (it.id == id) updated else it })
         }
+    }
+
+    // Google share links and short links that land on a calendar file; not other redirects,
+    // which may be temporary.
+    private fun resolvedIsBetter(original: String, resolved: String): Boolean {
+        val o = httpUrl(original)
+        if (o == resolved) return false
+        if (googleIcsUrl(o) != null) return true
+        return hostOf(o) != hostOf(resolved) && (".ics" in resolved || "/ical/" in resolved)
     }
 
     /**
@@ -153,16 +209,39 @@ object Calendar {
         }
     }
 
-    /** webcal:// links are just https. */
+    /** webcal:// links are just https, and plain http is tried as https (Android blocks http). */
     fun httpUrl(url: String): String {
         val u = url.trim()
         return when {
             u.startsWith("webcals://", true) -> "https://" + u.substring(10)
             u.startsWith("webcal://", true) -> "https://" + u.substring(9)
+            u.startsWith("http://", true) -> "https://" + u.substring(7)
             u.contains("://") -> u
             else -> "https://$u"
         }
     }
+
+    fun hostOf(url: String): String =
+        runCatching { java.net.URI(url).host?.removePrefix("www.") }.getOrNull() ?: "the server"
+
+    /**
+     * Google share and embed links (…?cid=… or …?src=…) point at a web page.
+     * The calendar itself is at /calendar/ical/<id>/public/basic.ics, if it's public.
+     */
+    fun googleIcsUrl(url: String): String? {
+        if (!hostOf(url).endsWith("google.com")) return null
+        val decoded = generateSequence(url) { java.net.URLDecoder.decode(it, "UTF-8").takeIf { d -> d != it } }.last()
+        val raw = Regex("""[?&](?:cid|src)=([^&\s]+)""").find(decoded)?.groupValues?.get(1) ?: return null
+        val id = if ('@' in raw) raw else runCatching {
+            String(java.util.Base64.getUrlDecoder().decode(raw.replace('+', '-').replace('/', '_').trimEnd('=')))
+        }.getOrNull()
+        if (id == null || '@' !in id) return null
+        return "https://calendar.google.com/calendar/ical/" + java.net.URLEncoder.encode(id, "UTF-8") + "/public/basic.ics"
+    }
+
+    const val GOOGLE_PRIVATE =
+        "This Google calendar isn't public, so it needs its secret address. On a computer, open Google Calendar → " +
+            "Settings → click the calendar → Integrate calendar → copy \"Secret address in iCal format\"."
 }
 
 /** Calendar links in any text: https://, http:// or webcal:// (also finds them in .url shortcut files). */
