@@ -1,8 +1,8 @@
 [tool]
 id = "com.jmsbrain.subcalscriber"
 label = "SubcalScriber"
-versionCode = 4
-versionName = "0.4.0"
+versionCode = 5
+versionName = "1.0.0"
 # Only to download the .ics feeds the user adds.
 permissions = ["android.permission.INTERNET"]
 capabilities = ["tool-manager-provider"]
