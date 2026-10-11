@@ -106,6 +106,36 @@ object Calendar {
         }
     }
 
+    /**
+     * Adds each new link as a feed, named after the calendar (or its web address)
+     * with a free letter. Returns how many were added.
+     */
+    suspend fun addLinks(links: List<Link>): Int {
+        val known = _feeds.value.map { httpUrl(it.url) }.toMutableSet()
+        var added = 0
+        for (link in links) {
+            if (!known.add(httpUrl(link.url))) continue
+            val host = runCatching { java.net.URI(httpUrl(link.url)).host?.removePrefix("www.") }.getOrNull() ?: "Calendar"
+            val first = link.name ?: host
+            val feed = save(Feed(name = first, tag = freeTag(first, usedTags()), url = link.url))
+            refresh(feed.id)
+            val name = if (link.name != null) null else withContext(Dispatchers.IO) {
+                icsFile(feed.id).takeIf { it.isFile }?.readText()?.let(Ics::calendarName)
+            }
+            if (name != null) {
+                lock.withLock {
+                    val current = feed(feed.id) ?: return@withLock
+                    val used = _feeds.value.filter { it.id != feed.id }.map { it.tag }.toSet()
+                    write(_feeds.value.map { if (it.id == feed.id) current.copy(name = name, tag = freeTag(name, used)) else it })
+                }
+            }
+            added++
+        }
+        return added
+    }
+
+    private fun usedTags() = _feeds.value.map { it.tag }.toSet()
+
     suspend fun agenda(from: ZonedDateTime, to: ZonedDateTime, zone: ZoneId): List<AgendaItem> {
         val feeds = _feeds.value
         val events = lock.withLock {
@@ -133,6 +163,21 @@ object Calendar {
             else -> "https://$u"
         }
     }
+}
+
+/** Calendar links in any text: https://, http:// or webcal:// (also finds them in .url shortcut files). */
+/** A link found in uploaded text, with the name written before it on the same line ("Work: https://…"). */
+data class Link(val url: String, val name: String?)
+
+fun findLinks(text: String): List<Link> {
+    val pattern = Regex("""(?i)\b(?:https?|webcals?)://[^\s"'<>]+""")
+    return text.lines().flatMap { line ->
+        pattern.findAll(line).mapIndexed { i, m ->
+            val before = if (i == 0) line.substring(0, m.range.first).trim().trim(':', '|', '-', '=', ',', '(', '"').trim() else ""
+            val name = before.takeIf { it.isNotEmpty() && !it.equals("URL", true) }
+            Link(m.value.trimEnd('.', ',', ')', ';'), name)
+        }.toList()
+    }.distinctBy { it.url }
 }
 
 /** One letter or digit, uppercased. */

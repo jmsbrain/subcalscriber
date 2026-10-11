@@ -14,13 +14,18 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.lifecycle.viewModelScope
 import com.jmsbrain.subcalscriber.data.AgendaItem
+import com.jmsbrain.subcalscriber.IMPORT_FOLDER
 import com.jmsbrain.subcalscriber.data.Calendar
+import com.jmsbrain.subcalscriber.data.Feed
+import com.jmsbrain.subcalscriber.data.findLinks
 import com.thelightphone.sdk.InitialScreen
+import com.thelightphone.sdk.LightFileShare
 import com.thelightphone.sdk.LightScreen
 import com.thelightphone.sdk.LightViewModel
 import com.thelightphone.sdk.SealedLightActivity
 import com.thelightphone.sdk.SimpleLightScreen
 import com.thelightphone.sdk.ui.LightBarButton
+import com.thelightphone.sdk.ui.LightFullscreenModal
 import com.thelightphone.sdk.ui.LightIcons
 import com.thelightphone.sdk.ui.LightText
 import com.thelightphone.sdk.ui.LightTextVariant
@@ -29,8 +34,10 @@ import com.thelightphone.sdk.ui.lightClickable
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.ZonedDateTime
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /** How far ahead the agenda looks. */
 const val AGENDA_DAYS = 60L
@@ -38,19 +45,45 @@ const val AGENDA_DAYS = 60L
 /** Feeds older than this get re-downloaded when the app opens. */
 private const val STALE_MS = 60 * 60 * 1000L
 
-class AgendaViewModel : LightViewModel<Unit>() {
+class AgendaViewModel(private val files: LightFileShare) : LightViewModel<Unit>() {
     /** Each day with its events; null while loading. */
     val days = MutableStateFlow<List<Pair<LocalDate, List<AgendaItem>>>?>(null)
     val showing = MutableStateFlow<String?>(null) // feed id, or null for all
     val refreshing = MutableStateFlow(false)
+    val message = MutableStateFlow<String?>(null)
     private var all: List<AgendaItem> = emptyList()
 
     override fun onScreenShow(screen: SimpleLightScreen<Unit>) {
         if (showing.value != null && Calendar.feed(showing.value!!) == null) showing.value = null
         viewModelScope.launch {
             load()
+            importUploads()
             val now = System.currentTimeMillis()
             if (Calendar.feeds.value.any { (it.updatedAt ?: 0) < now - STALE_MS }) refresh(onlyStale = true)
+        }
+    }
+
+    // Links uploaded through Tool Manager. Each file is removed once read.
+    private suspend fun importUploads() {
+        val uploads = withContext(Dispatchers.IO) { files.list(IMPORT_FOLDER).filter { it.isFile } }
+        if (uploads.isEmpty() || refreshing.value) return
+        refreshing.value = true
+        val links = withContext(Dispatchers.IO) {
+            uploads.flatMap { f ->
+                val path = "$IMPORT_FOLDER/${f.name}"
+                val text = runCatching { files.read(path) { it.readText() } }.getOrNull().orEmpty()
+                files.delete(path)
+                findLinks(text)
+            }
+        }
+        val added = Calendar.addLinks(links)
+        refreshing.value = false
+        load()
+        message.value = when {
+            links.isEmpty() -> "No calendar links found in the uploaded file. Put one https:// or webcal:// link per line."
+            added == 0 -> "Those calendars are already added."
+            added == 1 -> "Added 1 calendar. Tap the gear to rename it or change its letter."
+            else -> "Added $added calendars. Tap the gear to rename them or change their letters."
         }
     }
 
@@ -118,7 +151,7 @@ class AgendaScreen(sealedActivity: SealedLightActivity) :
     }
 
     override val viewModelClass get() = AgendaViewModel::class.java
-    override fun createViewModel() = AgendaViewModel()
+    override fun createViewModel() = AgendaViewModel(lightContext.fileShare)
 
     @Composable
     override fun Content() {
@@ -126,13 +159,28 @@ class AgendaScreen(sealedActivity: SealedLightActivity) :
         val feeds by Calendar.feeds.collectAsState()
         val showing by viewModel.showing.collectAsState()
         val refreshing by viewModel.refreshing.collectAsState()
+        val message by viewModel.message.collectAsState()
         val shownFeed = feeds.firstOrNull { it.id == showing }
         val zone = ZoneId.systemDefault()
 
+        SubcalTheme {
+            Agenda(days, feeds.isEmpty(), shownFeed, refreshing, zone)
+            message?.let { LightFullscreenModal(message = it, onClose = { viewModel.message.value = null }) }
+        }
+    }
+
+    @Composable
+    private fun Agenda(
+        days: List<Pair<LocalDate, List<AgendaItem>>>?,
+        noFeeds: Boolean,
+        shownFeed: Feed?,
+        refreshing: Boolean,
+        zone: ZoneId,
+    ) {
         SubcalPage(
             title = shownFeed?.name ?: "SubcalScriber",
             right = LightBarButton.LightIcon(icon = LightIcons.SETTINGS, onClick = { navigateTo({ FeedsScreen(it) }) }),
-            bottom = if (feeds.isEmpty()) {
+            bottom = if (noFeeds) {
                 listOf(LightBarButton.Text(text = "ADD FEED", onClick = { navigateTo({ FeedEditScreen(it, null) }) }))
             } else {
                 listOf(
@@ -143,8 +191,8 @@ class AgendaScreen(sealedActivity: SealedLightActivity) :
         ) {
             val list = days
             when {
-                feeds.isEmpty() -> LightText(
-                    "No calendars yet. Tap ADD FEED and paste the web address of an .ics calendar.",
+                noFeeds -> LightText(
+                    "No calendars yet. Tap ADD FEED, or upload a text file of calendar links to the \"Add feeds\" folder in Tool Manager.",
                     LightTextVariant.Paragraph,
                     lighten = true,
                 )

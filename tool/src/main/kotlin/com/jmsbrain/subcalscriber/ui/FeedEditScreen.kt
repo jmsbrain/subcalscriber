@@ -103,7 +103,7 @@ class FeedEditScreen(sealedActivity: SealedLightActivity, private val id: String
                 TapField("LETTER", d.tag, "Picked from the name") {
                     navigateTo({ TextEditScreen(it, "One letter", d.tag) }) { text -> text?.let(viewModel::setTag) }
                 }
-                TapField("ADDRESS", d.url, "Tap to paste the .ics or webcal:// link") {
+                TapField("ADDRESS", d.url, "Tap to type the link, or use Tool Manager") {
                     navigateTo({ TextEditScreen(it, "Feed address", d.url, caps = false) }) { text -> text?.let(viewModel::setUrl) }
                 }
                 if (!viewModel.isNew) TapField("STATUS", status(d), "") {}

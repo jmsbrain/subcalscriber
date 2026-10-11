@@ -73,6 +73,23 @@ class IcsTest {
         assertEquals(ny, Ics.zone("/mozilla.org/20050126_1/America/New_York"))
     }
 
+    @Test fun linksFromUploadedText() {
+        val text = "My calendars:\r\nwebcal://p01-caldav.icloud.com/published/2/abc\r\n\r\nhttps://example.com/work.ics, see also (https://example.com/b.ics).\r\n[InternetShortcut]\r\nURL=https://example.com/work.ics\r\n"
+        assertEquals(
+            listOf("webcal://p01-caldav.icloud.com/published/2/abc", "https://example.com/work.ics", "https://example.com/b.ics"),
+            findLinks(text).map { it.url },
+        )
+        assertEquals(
+            listOf(Link("https://a.example/x.ics", "Work"), Link("webcal://b.example/y", "Kids' school"), Link("https://c.example/z", null)),
+            findLinks("Work: https://a.example/x.ics\nKids' school - webcal://b.example/y\nhttps://c.example/z"),
+        )
+    }
+
+    @Test fun calendarNameFromFeed() {
+        assertEquals("Family, shared", Ics.calendarName("BEGIN:VCALENDAR\r\nX-WR-CALNAME:Family\\, shared\r\nEND:VCALENDAR"))
+        assertEquals(null, Ics.calendarName(cal("UID:1\r\nDTSTART:20261014T120000Z")))
+    }
+
     @Test fun webcalBecomesHttps() {
         assertEquals("https://example.com/a.ics", Calendar.httpUrl("webcal://example.com/a.ics"))
         assertEquals("W", tagFrom(" work"))

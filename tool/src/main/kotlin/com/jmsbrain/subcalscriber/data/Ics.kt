@@ -79,6 +79,12 @@ object Ics {
         return events
     }
 
+    /** The calendar's own name (X-WR-CALNAME), if it has one. */
+    fun calendarName(text: String): String? =
+        unfold(text).firstNotNullOfOrNull { line ->
+            parseLine(line)?.takeIf { it.name == "X-WR-CALNAME" }?.let { text(it.value) }?.takeIf { it.isNotBlank() }
+        }
+
     /** Every occurrence overlapping [from, to), with overrides and cancellations applied. */
     fun expand(events: List<IcsEvent>, from: ZonedDateTime, to: ZonedDateTime, zone: ZoneId): List<Occurrence> {
         val overrides = events.filter { it.recurrenceId != null }

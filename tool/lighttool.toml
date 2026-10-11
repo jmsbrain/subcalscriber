@@ -1,11 +1,11 @@
 [tool]
 id = "com.jmsbrain.subcalscriber"
 label = "SubcalScriber"
-versionCode = 1
-versionName = "0.1.0"
+versionCode = 2
+versionName = "0.2.0"
 # Only to download the .ics feeds the user adds.
 permissions = ["android.permission.INTERNET"]
-capabilities = []
+capabilities = ["tool-manager-provider"]
 orientation = "portrait"
 # for the LightOS emulator, use the line below and build with -DlightSdk.allowAltServerPackage=true
 # serverPackage = "com.thelightphone.sdk.emulator"
