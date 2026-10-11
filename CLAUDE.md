@@ -38,4 +38,5 @@ This repo starts from [lightphone/light-sdk](https://github.com/lightphone/light
 - Emulator: 1080×1240, API 34, no Google Play. LightOS features: `docs/system_app/README.md`.
 - `tool/scripts/emulator-install.sh [--testdata]` builds for the LightOS emulator, installs on `emulator-5554` only and opens SubcalScriber. `--testdata` loads `tool/testdata` (made-up feeds, marked fresh so the fake addresses aren't fetched). It puts `serverPackage` back to `com.lightos` when done.
 - Light Phone III: `adb -s <serial> install -r tool/build/outputs/apk/debug/tool-debug.apk` ("Any tools" on).
+- Releases attach `:tool:assembleRelease` (stripped, no barcode scanner; see `tool/build.gradle.kts`). Test that build on the emulator before publishing: stripping can break things only at run time.
 - Use made-up data for screenshots. Never the owner's real feeds or events.

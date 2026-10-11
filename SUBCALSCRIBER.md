@@ -14,7 +14,7 @@ SubcalScriber only connects to the feed addresses you add. Nothing else leaves t
 ./gradlew :tool:assembleDebug :tool:lintDebug
 ```
 
-The APK ends up in `tool/build/outputs/apk/debug/tool-debug.apk`.
+The APK ends up in `tool/build/outputs/apk/debug/tool-debug.apk`. For a release, `./gradlew :tool:assembleRelease` makes a much smaller `tool/build/outputs/apk/release/tool-release.apk` (about 6 MB instead of 80): unused code is stripped and the SDK's barcode scanner, which SubcalScriber doesn't use, is left out.
 
 ## Using it
 
