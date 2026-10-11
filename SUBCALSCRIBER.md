@@ -15,3 +15,14 @@ SubcalScriber only connects to the feed addresses you add. Nothing else leaves t
 ```
 
 The APK ends up in `tool/build/outputs/apk/debug/tool-debug.apk`.
+
+## Using it
+
+- Tap the gear, then **ADD FEED**. Give it a name and paste the feed's address (`https://…ics` or `webcal://…`). It downloads right away so a bad address shows up immediately.
+- Each feed gets a one-letter tag, shown next to its events. It defaults to a letter of the name that no other feed uses; tap **LETTER** to change it.
+- The agenda shows the next 60 days. **SHOW** cycles through all feeds, then one feed at a time.
+- Feeds update when the app opens if they're more than an hour old, or when you tap **REFRESH**. Nothing runs in the background.
+
+## Testing on the emulator
+
+`tool/scripts/emulator-start.sh` boots the `Light_Phone` emulator. `tool/scripts/emulator-install.sh` builds, installs and opens SubcalScriber there; add `--testdata` to load the made-up feeds in `tool/testdata`.

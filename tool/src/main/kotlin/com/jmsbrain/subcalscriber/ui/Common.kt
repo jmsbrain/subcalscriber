@@ -7,20 +7,28 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import com.thelightphone.sdk.SealedLightActivity
+import com.thelightphone.sdk.SimpleLightScreen
+import com.thelightphone.sdk.rememberKeyboardOptions
 import com.thelightphone.sdk.ui.LightBarButton
 import com.thelightphone.sdk.ui.LightBottomBar
 import com.thelightphone.sdk.ui.LightIcons
 import com.thelightphone.sdk.ui.LightScrollView
+import com.thelightphone.sdk.ui.LightText
+import com.thelightphone.sdk.ui.LightTextInputEditor
+import com.thelightphone.sdk.ui.LightTextVariant
 import com.thelightphone.sdk.ui.LightTheme
 import com.thelightphone.sdk.ui.LightThemeController
 import com.thelightphone.sdk.ui.LightThemeTokens
 import com.thelightphone.sdk.ui.LightTopBar
 import com.thelightphone.sdk.ui.LightTopBarCenter
 import com.thelightphone.sdk.ui.gridUnitsAsDp
+import com.thelightphone.sdk.ui.lightClickable
 
 /** Theme + background shared by every screen. */
 @Composable
@@ -60,3 +68,66 @@ fun SubcalPage(
 }
 
 fun backButton(onClick: () -> Unit) = LightBarButton.LightIcon(icon = LightIcons.BACK, onClick = onClick)
+
+/** Label, then the value (or a dimmed hint when empty). Tap to edit. */
+@Composable
+fun TapField(label: String, value: String, placeholder: String, onClick: () -> Unit) {
+    LightText(label, LightTextVariant.Superfine, lighten = true, modifier = Modifier.padding(top = 0.5f.gridUnitsAsDp()))
+    LightText(
+        text = value.ifBlank { placeholder },
+        variant = LightTextVariant.Paragraph,
+        lighten = value.isBlank(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .lightClickable(onClick = onClick)
+            .padding(vertical = 0.3f.gridUnitsAsDp()),
+    )
+}
+
+/** Full-screen Light keyboard editor; returns the new text, or null if backed out. */
+class TextEditScreen(
+    sealedActivity: SealedLightActivity,
+    private val title: String,
+    private val initial: String,
+    private val caps: Boolean = true,
+) : SimpleLightScreen<String?>(sealedActivity) {
+
+    @Composable
+    override fun Content() {
+        val keyboard = rememberKeyboardOptions()
+        val state = rememberTextFieldState(initial)
+        SubcalTheme {
+            LightTextInputEditor(
+                title = title,
+                state = state,
+                keyboardOptionsFlow = keyboard,
+                onSubmit = { goBack(it.toString()) },
+                onBack = { goBack(null) },
+                initialCaps = caps && initial.isBlank(),
+                singleLine = true,
+            )
+        }
+    }
+}
+
+/** Yes/no question; returns true for [confirm]. */
+class ConfirmScreen(
+    sealedActivity: SealedLightActivity,
+    private val message: String,
+    private val confirm: String,
+) : SimpleLightScreen<Boolean?>(sealedActivity) {
+
+    @Composable
+    override fun Content() {
+        SubcalPage(
+            title = "",
+            left = backButton { goBack(false) },
+            bottom = listOf(
+                LightBarButton.Text(text = "CANCEL", onClick = { goBack(false) }),
+                LightBarButton.Text(text = confirm, onClick = { goBack(true) }),
+            ),
+        ) {
+            LightText(text = message, variant = LightTextVariant.Paragraph)
+        }
+    }
+}
