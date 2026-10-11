@@ -167,27 +167,32 @@ object Calendar {
      * with a free letter. Returns how many were added.
      */
     suspend fun addLinks(links: List<Link>): Int {
-        val known = _feeds.value.map { httpUrl(it.url) }.toMutableSet()
+        val known = _feeds.value.map { it.url }.toMutableList()
         var added = 0
         for (link in links) {
-            if (!known.add(httpUrl(link.url))) continue
+            if (known.any { sameFeed(it, link.url) }) continue
+            known += link.url
             val host = runCatching { java.net.URI(httpUrl(link.url)).host?.removePrefix("www.") }.getOrNull() ?: "Calendar"
             val first = link.name ?: host
             val feed = save(Feed(name = first, tag = freeTag(first, usedTags()), url = link.url))
             refresh(feed.id)
-            val name = if (link.name != null) null else withContext(Dispatchers.IO) {
-                icsFile(feed.id).takeIf { it.isFile }?.readText()?.let(Ics::calendarName)
-            }
-            if (name != null) {
-                lock.withLock {
-                    val current = feed(feed.id) ?: return@withLock
-                    val used = _feeds.value.filter { it.id != feed.id }.map { it.tag }.toSet()
-                    write(_feeds.value.map { if (it.id == feed.id) current.copy(name = name, tag = freeTag(name, used)) else it })
-                }
-            }
+            if (link.name == null) nameAfterCalendar(feed.id, pickTag = true)
             added++
         }
         return added
+    }
+
+    /** Renames a feed to the calendar's own name, if the downloaded file has one. */
+    suspend fun nameAfterCalendar(id: String, pickTag: Boolean) {
+        val name = withContext(Dispatchers.IO) {
+            icsFile(id).takeIf { it.isFile }?.readText()?.let(Ics::calendarName)
+        } ?: return
+        lock.withLock {
+            val current = feed(id) ?: return@withLock
+            val used = _feeds.value.filter { it.id != id }.map { it.tag }.toSet()
+            val tag = if (pickTag) freeTag(name, used) else current.tag
+            write(_feeds.value.map { if (it.id == id) current.copy(name = name, tag = tag) else it })
+        }
     }
 
     private fun usedTags() = _feeds.value.map { it.tag }.toSet()
@@ -221,6 +226,12 @@ object Calendar {
         }
     }
 
+    /** Same calendar, even if one is a Google share link and the other its .ics address. */
+    fun sameFeed(a: String, b: String): Boolean {
+        fun key(u: String) = httpUrl(u).let { googleIcsUrl(it) ?: it }
+        return key(a) == key(b)
+    }
+
     fun hostOf(url: String): String =
         runCatching { java.net.URI(url).host?.removePrefix("www.") }.getOrNull() ?: "the server"
 
@@ -252,8 +263,10 @@ fun findLinks(text: String): List<Link> {
     val pattern = Regex("""(?i)\b(?:https?|webcals?)://[^\s"'<>]+""")
     return text.lines().flatMap { line ->
         pattern.findAll(line).mapIndexed { i, m ->
-            val before = if (i == 0) line.substring(0, m.range.first).trim().trim(':', '|', '-', '=', ',', '(', '"').trim() else ""
-            val name = before.takeIf { it.isNotEmpty() && !it.equals("URL", true) }
+            // Only "Name: link" (or "Name - link"), not any chat text before a link.
+            val before = if (i == 0) line.substring(0, m.range.first).trim() else ""
+            val name = before.takeIf { it.length in 2..40 && it.last() in ":|-=" }
+                ?.trimEnd(':', '|', '-', '=', ' ')?.takeIf { it.isNotEmpty() && !it.equals("URL", true) }
             Link(m.value.trimEnd('.', ',', ')', ';'), name)
         }.toList()
     }.distinctBy { it.url }

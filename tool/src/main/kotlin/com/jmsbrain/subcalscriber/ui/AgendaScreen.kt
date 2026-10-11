@@ -192,7 +192,7 @@ class AgendaScreen(sealedActivity: SealedLightActivity) :
             val list = days
             when {
                 noFeeds -> LightText(
-                    "No calendars yet. Tap ADD FEED, or upload a text file of calendar links to the \"Add feeds\" folder in Tool Manager.",
+                    "No calendars yet. Copy a calendar link (in Signal: long-press, Copy text), then tap ADD FEED and PASTE LINK.",
                     LightTextVariant.Paragraph,
                     lighten = true,
                 )

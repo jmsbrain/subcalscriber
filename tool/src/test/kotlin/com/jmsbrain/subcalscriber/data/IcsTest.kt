@@ -83,6 +83,16 @@ class IcsTest {
             listOf(Link("https://a.example/x.ics", "Work"), Link("webcal://b.example/y", "Kids' school"), Link("https://c.example/z", null)),
             findLinks("Work: https://a.example/x.ics\nKids' school - webcal://b.example/y\nhttps://c.example/z"),
         )
+        // Chat text before a link isn't a name.
+        assertEquals(listOf(Link("https://d.example/c.ics", null)), findLinks("here's the holidays one https://d.example/c.ics"))
+    }
+
+    @Test fun shareLinkAndIcsAddressAreTheSameFeed() {
+        assertTrue(Calendar.sameFeed(
+            "https://calendar.google.com/calendar/u/0?cid=ZW4udXNhI2hvbGlkYXlAZ3JvdXAudi5jYWxlbmRhci5nb29nbGUuY29t",
+            "https://calendar.google.com/calendar/ical/en.usa%23holiday%40group.v.calendar.google.com/public/basic.ics",
+        ))
+        assertTrue(Calendar.sameFeed("webcal://a.example/x.ics", "https://a.example/x.ics"))
     }
 
     @Test fun calendarNameFromFeed() {
